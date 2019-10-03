@@ -197,13 +197,13 @@ class EasyBake(bpy.types.Operator):
         bakeSource = {}
         base = {}
 
-        if selection_count <= 0:
+        if selection_count:
             base = bpy.context.active_object
-
+         
             if selection_count == 1:
                 solo_bake = True
 
-            if selection_count == 2:
+            elif selection_count == 2:
                 bakeSource = any(bs for bs in bpy.context.selected_objects if bs != base)
 
             else:
@@ -218,7 +218,7 @@ class EasyBake(bpy.types.Operator):
 
         
     #2 make sure we are in object mode and nothing is selected
-        if bpy.context.object.mode == 'EDIT':
+        if bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
     #5 remember render engine and switch to CYCLES for baking
@@ -228,16 +228,32 @@ class EasyBake(bpy.types.Operator):
     #6 create temporary bake image and material
         
         bakeimage = bpy.data.images.new("BakeImage", width=context.scene.bakeWidth, height=context.scene.bakeHeight)
-        bakemat = bpy.data.materials.new(name="bakemat")
-        bakemat.use_nodes = True
+        # bakemat = bpy.data.materials.new(name="bakemat")
+        # bakemat.use_nodes = True
 
-        orig_mat = bpy.context.active_object.data.materials[0]
-        bpy.context.active_object.data.materials[0] = bakemat
-        node_tree = bakemat.node_tree
-        node = node_tree.nodes.new("ShaderNodeTexImage")
-        node.select = True
-        node_tree.nodes.active = node
-        node.image = bakeimage
+ 
+        generated_nodes = {}
+
+        # if solo_bake:
+        for mat in base.data.materials:
+               
+            node_tree = mat.node_tree
+            new_node = node_tree.nodes.new("ShaderNodeTexImage")
+            generated_nodes[mat] = new_node
+            new_node.select = True
+            node_tree.nodes.active = new_node
+            new_node.image = bakeimage
+             
+
+        # else:
+
+        
+        # bpy.context.active_object.data.materials[0] = bakemat
+        # node_tree = bakemat.node_tree
+        # node = node_tree.nodes.new("ShaderNodeTexImage")
+        # node.select = True
+        # node_tree.nodes.active = node
+        # node.image = bakeimage
 
 
 
@@ -250,21 +266,21 @@ class EasyBake(bpy.types.Operator):
     #11 bake all maps!
         if context.scene.bakeNormal:
             bpy.context.scene.cycles.samples = context.scene.samplesNormal
-            bpy.ops.object.bake(type='NORMAL', use_clear=True, use_selected_to_active=True, normal_space='TANGENT')
+            bpy.ops.object.bake(type='NORMAL', use_clear=True, use_selected_to_active=not solo_bake, normal_space='TANGENT')
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_normal.tga"
             bakeimage.file_format = 'TARGA'
             bakeimage.save()
         
         if context.scene.bakeObject:
             bpy.context.scene.cycles.samples = context.scene.samplesObject
-            bpy.ops.object.bake(type='NORMAL', use_clear=True, use_selected_to_active=True, normal_space='OBJECT')
+            bpy.ops.object.bake(type='NORMAL', use_clear=True, use_selected_to_active=not solo_bake, normal_space='OBJECT')
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_object.tga"
             bakeimage.file_format = 'TARGA'
             bakeimage.save()
 
         if context.scene.bakeAO:
             bpy.context.scene.cycles.samples = context.scene.samplesAO
-            bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=not context.scene.UseLowOnly)
+            bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=not solo_bake)
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_ao.tga"
             bakeimage.file_format = 'TARGA'
             bakeimage.save()
@@ -274,14 +290,14 @@ class EasyBake(bpy.types.Operator):
             bpy.context.scene.render.bake.use_pass_direct = False
             bpy.context.scene.render.bake.use_pass_indirect = False
             bpy.context.scene.render.bake.use_pass_color = True
-            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=True)
+            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_color.tga"
             bakeimage.file_format = 'TARGA'
             bakeimage.save()
         
         if context.scene.bakeRoughness:
             bpy.context.scene.cycles.samples = context.scene.samplesRoughness
-            bpy.ops.object.bake(type='ROUGHNESS', use_clear=True, use_selected_to_active=True)
+            bpy.ops.object.bake(type='ROUGHNESS', use_clear=True, use_selected_to_active=not solo_bake)
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_roughness.tga"
             bakeimage.file_format = 'TARGA'
             bakeimage.save()
@@ -373,9 +389,14 @@ class EasyBake(bpy.types.Operator):
         #cleanup temporary objects and materials
         bpy.ops.object.select_all(action='DESELECT')
         bpy.data.images.remove(bakeimage)
-        bakemat.node_tree.nodes.remove(node)
-        bpy.data.materials.remove(bakemat)
-        bpy.context.active_object.data.materials[0] = orig_mat
+
+        for mat in base.data.materials:
+            mat.node_tree.nodes.remove(generated_nodes[mat])
+
+        # bakemat.node_tree.nodes.remove(node)
+        # bpy.data.materials.remove(bakemat)
+        # bpy.context.active_object.data.materials[0] = orig_mat
+        
         bpy.data.scenes[bpy.context.scene.name].render.engine = orig_renderer
 
         #reload all textures
@@ -443,6 +464,11 @@ def register():
         default = False,
         description = "Bake Roughness Map",
         )
+    bpy.types.Scene.bakeMetallic = bpy.props.BoolProperty (
+        name = "bakeMetallic",
+        default = False,
+        description = "Bake Metallic Map",
+        )        
     
     bpy.types.Scene.bakeUV = bpy.props.BoolProperty (
         name = "bakeUV",
@@ -506,6 +532,8 @@ def unregister():
     bpy.utils.unregister_class(EasyBake)
     bpy.utils.unregister_class(EasyBakeUIPanel)
 
+
+    del bpy.types.Scene.bakeMetallic
     del bpy.types.Scene.base
     del bpy.types.Scene.bakeSource
     del bpy.types.Scene.bakeNormal
