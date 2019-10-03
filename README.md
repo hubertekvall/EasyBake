@@ -2,7 +2,8 @@
 
 The intent of this fork is to add support for baking of metallicness. Currently there's no native support for baking metallicness in Blender, even worse when doing the color baking of a material metallic colors will not show up. This might be technically correct since metals lack diffuse and are all specular, but in a metallic workflow this is a burden since we often want color in our workflow to create gold, bronze, copper, etc. 
 
-As a bonus this fork also implements an emission baking pass.
+Also in the process a massive simplification has been done to fit my personal workflow, some might not like it.
+The infographic down below is thus outdated.
 
 
 # EasyBake
