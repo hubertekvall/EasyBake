@@ -306,7 +306,8 @@ class EasyBake(bpy.types.Operator):
                 nodes = node_tree.nodes
                 material_output = nodes['Material Output']
                 
-                active_link = next(link for link in links if link.to_socket == material_output.inputs['Surface'])    
+                # active_link = next(link for link in links if link.to_socket == material_output.inputs['Surface']) 
+                active_link = material_output.inputs['Surface'].links[0]   
                 metallic_socket = active_link.from_node.inputs['Metallic']
 
                 diffuse_shader = nodes.new(type='ShaderNodeBsdfDiffuse')
