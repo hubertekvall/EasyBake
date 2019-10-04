@@ -31,6 +31,12 @@ def hide(objectType):
         bpy.data.objects[objectType].hide_viewport = True
 
 
+def find_link():
+    active_link = next(l for l in currentLinks if l.to_socket == outputNode.inputs['Surface'])        
+
+
+
+
 class EasyBakeUIPanel(bpy.types.Panel):
     """EasyBakeUIPanel Panel"""
     bl_label = "EasyBake"
@@ -46,26 +52,8 @@ class EasyBakeUIPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         
-        
-        
-        # box = layout.box()
-
-        # col = box.column(align=True)
-
-        # row = col.row(align = True)
-        # row.prop_search(context.scene, "base", context.scene, "objects", text="", icon="MESH_ICOSPHERE")
-        
-        
-        
-        # row = col.row(align = True)
-        # row.prop_search(context.scene, "bakeSource", context.scene, "objects", text="", icon="MESH_UVSPHERE")
-        # row.enabled = not context.scene.UseLowOnly
-        
-        
 
         
-
- 
         col = layout.column(align=True)
         col.separator()
         row = col.row(align = True)
@@ -74,11 +62,7 @@ class EasyBakeUIPanel(bpy.types.Panel):
 
 
 
-
-
-
         box = layout.box()
-
         col = box.column(align=True)
         row = col.row(align = True)
         row.label(text="Width:")
@@ -139,8 +123,8 @@ class EasyBakeUIPanel(bpy.types.Panel):
 
         row = col.row(align = True)
         row.prop(context.scene, "bakeMetallic", icon="SHADING_TEXTURE", text="Metallic")
-        if context.scene.bakeRoughness:
-            row.prop(context.scene, "bakeMetallic", text="")
+        if context.scene.bakeMetallic:
+            row.prop(context.scene, "samplesMetallic", text="")
             
 
         row = col.row(align = True)
@@ -194,17 +178,18 @@ class EasyBake(bpy.types.Operator):
 
         selection_count = len(bpy.context.selected_objects)
         solo_bake = False
-        bakeSource = {}
-        base = {}
+        # bakeSource = {}
+        # base = {}
 
         if selection_count:
             base = bpy.context.active_object
          
             if selection_count == 1:
                 solo_bake = True
+                bakeSource = base
 
             elif selection_count == 2:
-                bakeSource = any(bs for bs in bpy.context.selected_objects if bs != base)
+                bakeSource = [bs for bs in bpy.context.selected_objects if bs != base][0]
 
             else:
                 self.report({'WARNING'}, "Too many objects selected! Max two!")
@@ -228,13 +213,8 @@ class EasyBake(bpy.types.Operator):
     #6 create temporary bake image and material
         
         bakeimage = bpy.data.images.new("BakeImage", width=context.scene.bakeWidth, height=context.scene.bakeHeight)
-        # bakemat = bpy.data.materials.new(name="bakemat")
-        # bakemat.use_nodes = True
 
- 
         generated_nodes = {}
-
-        # if solo_bake:
         for mat in base.data.materials:
                
             node_tree = mat.node_tree
@@ -245,21 +225,8 @@ class EasyBake(bpy.types.Operator):
             new_node.image = bakeimage
              
 
-        # else:
-
-        
-        # bpy.context.active_object.data.materials[0] = bakemat
-        # node_tree = bakemat.node_tree
-        # node = node_tree.nodes.new("ShaderNodeTexImage")
-        # node.select = True
-        # node_tree.nodes.active = node
-        # node.image = bakeimage
-
-
-
-
-
-
+ 
+    
 
 
 
@@ -313,90 +280,71 @@ class EasyBake(bpy.types.Operator):
             uvfilepath = context.scene.bakeFolder+context.scene.bakePrefix+"_uv.png"
             bpy.ops.uv.export_layout(filepath=uvfilepath, size=(context.scene.bakeWidth, context.scene.bakeHeight))
             bpy.context.area.type = original_type
-
-
-        # # Metallicness baking
-        # if context.scene.bakeMetallic:
-        #     materials = {}
-
-        #     if context.scene.UseLowOnly:
-        #         materials = context.scene.base.materials
-        #     else
-        #         materials = context.scene.bakeSource.materials    
-                
-
-            
-        #     # Store old links so we can restore them after we're done
-        #     oldLinks = {}
-
-        #     # Store newly generated nodes so we can remove them afer we're done
-        #     newNodes = {}
-
-            
-        #     # Go through every material 
-        #     for mat in materials:
-        #         nodeTree = mat.node_tree
-        #         links = mat.node_tree.links
-        #         nodes = mat.nodes
-        #         outputNode = mat.nodes['Material Output']
-
-        #         # Current link to material output
-        #         active_link = next(l for l in links if l.to_socket == outputNode.inputs['Surface'])
-                
-        #         # If the material has a metallic property
-        #         if active_link.from_node.name == 'Principled BSDF':                       
-                    
-        #             principledNode = active_link.from_node
-
-        #             # Store old links by material
-        #             oldLinks[mat].Append(active_link)
-
-        #             # Remove current link
-        #             links.remove(active_link)
-
-        #             # Create new diffuse node (Easiest way to capture arbitrary data)
-        #             newNodes[mat] = nodes.new(type='ShaderNodeDiffuse')
-
-        #             # Find if the metallic property has a connection or is using the default value
-        #             if principledNode.inputs['Metallic'].links:
-                        
-        #                 # Cache this link too so we can restore it later
-        #                 oldLinks[mat].Append(principledNode.inputs['Metallic'].links[0])
-
-        #                 # Connect whatever's in the Metallic slot to our new Diffuse color slot
-        #                 links.new
-
-
-
-        #     bpy.context.scene.cycles.samples = context.scene.samplesMetallic
-        #     bpy.context.scene.render.bake.use_pass_direct = False
-        #     bpy.context.scene.render.bake.use_pass_indirect = False
-        #     bpy.context.scene.render.bake.use_pass_color = True
-
-        #     bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not context.scene.UseLowOnly)
-
-        #     bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
-        #     bakeimage.file_format = 'TARGA'
-        #     bakeimage.save()
-
-            #for mat in context.scene.bakeSource.materials
-
-            # Delete output replacement and reconnect the Principled BDRSF
-
-
-
-
-        #cleanup temporary objects and materials
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.data.images.remove(bakeimage)
-
-        for mat in base.data.materials:
-            mat.node_tree.nodes.remove(generated_nodes[mat])
-
-        # bakemat.node_tree.nodes.remove(node)
-        # bpy.data.materials.remove(bakemat)
-        # bpy.context.active_object.data.materials[0] = orig_mat
         
+        #
+        #
+        # Bake Metallic
+        if context.scene.bakeMetallic:
+            old_materials = []
+            new_materials = []
+            
+
+            # Backup old materials of the bakesource and replace the slots with new clones
+            # Easier cleanup later on when we can just restore the old materials and discard our clones
+
+            for mslot in bakeSource.material_slots:
+                old_materials.append(mslot.material)
+                clone = mslot.material.copy()
+                mslot.material = clone
+                new_materials.append(clone)
+
+
+            for material in new_materials:
+              
+                node_tree = material.node_tree
+                links = node_tree.links
+                nodes = node_tree.nodes
+                material_output = nodes['Material Output']
+                
+                active_link = next(link for link in links if link.to_socket == material_output.inputs['Surface'])    
+                metallic_socket = active_link.from_node.inputs['Metallic']
+
+                diffuse_shader = nodes.new(type='ShaderNodeBsdfDiffuse')
+
+                if metallic_socket:
+                    if metallic_socket.is_linked:
+                        metallic_value_socket = metallic_socket.links[0].from_socket
+                        links.new(metallic_value_socket, diffuse_shader.inputs['Color'], True)
+                    else:
+                        diffuse_shader.inputs['Color'].default_value = (metallic_socket.default_value, metallic_socket.default_value, metallic_socket.default_value, 1)
+
+                links.new(diffuse_shader.outputs[0], material_output.inputs[0], verify_limits = True)        
+
+
+            bpy.context.scene.cycles.samples = context.scene.samplesMetallic
+            bpy.context.scene.render.bake.use_pass_direct = False
+            bpy.context.scene.render.bake.use_pass_indirect = False
+            bpy.context.scene.render.bake.use_pass_color = True
+
+            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
+
+            bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
+            bakeimage.file_format = 'TARGA'
+            bakeimage.save()
+
+            for i, mslot in enumerate(bakeSource.material_slots):
+                mslot.material = old_materials[i] 
+
+            for mat in new_materials:
+                bpy.data.materials.remove(mat)
+
+     
+
+
+
+
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.data.images.remove(bakeimage) 
         bpy.data.scenes[bpy.context.scene.name].render.engine = orig_renderer
 
         #reload all textures
@@ -436,8 +384,6 @@ def register():
         default = "bakeSource",
         description = "bakeSource object",
         )
-
-
 
     bpy.types.Scene.bakeNormal = bpy.props.BoolProperty (
         name = "bakeNormal",
@@ -500,6 +446,13 @@ def register():
         default = 1,
         description = "Roughness Map Sample Count",
         )
+    bpy.types.Scene.samplesMetallic = bpy.props.IntProperty (
+        name = "samplesMetallic",
+        default = 1,
+        description = "Metallic Map Sample Count",
+        )
+
+
     bpy.types.Scene.bakeWidth = bpy.props.IntProperty (
         name = "bakeWidth",
         default = 512,
