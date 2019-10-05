@@ -266,29 +266,29 @@ class EasyBake(bpy.types.Operator):
                 output_link = material_output.inputs['Surface'].links[0]   
                 socket_name = next(name for name in output_link.from_node.inputs.keys() if name == 'Base Color' or name == 'Color' )
                  
-                if  socket_name == 'Base Color' or socket_name == 'Color':
+                if socket_name == 'Base Color' or socket_name == 'Color':
                     color_socket = output_link.from_node.inputs[socket_name]
                     diffuse_shader = nodes.new(type='ShaderNodeBsdfDiffuse')
-                        if color_socket.is_linked:
-                            links.new(color_socket.links[0].from_socket, diffuse_shader.inputs['Color'], verify_limits = True)
+                    if color_socket.is_linked:
+                        links.new(color_socket.links[0].from_socket, diffuse_shader.inputs['Color'], verify_limits = True)
 
-                        else:
-                            diffuse_shader.inputs['Color'].default_value = (color_socket.default_value, color_socket.default_value, color_socket.default_value, 1)
+                    else:
+                        diffuse_shader.inputs['Color'].default_value = color_socket.default_value
 
 
                     links.new(diffuse_shader.outputs[0], material_output.inputs[0], verify_limits = True)        
 
 
-                bpy.context.scene.cycles.samples = context.scene.samplesMetallic
-                bpy.context.scene.render.bake.use_pass_direct = False
-                bpy.context.scene.render.bake.use_pass_indirect = False
-                bpy.context.scene.render.bake.use_pass_color = True
+            bpy.context.scene.cycles.samples = context.scene.samplesColor
+            bpy.context.scene.render.bake.use_pass_direct = False
+            bpy.context.scene.render.bake.use_pass_indirect = False
+            bpy.context.scene.render.bake.use_pass_color = True
 
-                bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
+            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
 
-                bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
-                bakeimage.file_format = 'TARGA'
-                bakeimage.save()
+            bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_color.tga"
+            bakeimage.file_format = 'TARGA'
+            bakeimage.save()
 
             pop_materials(bakeSource, backup)        
 
@@ -331,31 +331,31 @@ class EasyBake(bpy.types.Operator):
                 
                 output_link = material_output.inputs['Surface'].links[0]   
                 
-                if  output_link.from_node.inputs.has('Metallic'):
+                if 'Metallic' in output_link.from_node.inputs:
                     metallic_socket = output_link.from_node.inputs['Metallic']
                     diffuse_shader = nodes.new(type='ShaderNodeBsdfDiffuse')
 
                     
-                        if metallic_socket.is_linked:
-                            links.new(metallic_socket.links[0].from_socket, diffuse_shader.inputs['Color'], True)
+                    if metallic_socket.is_linked:
+                        links.new(metallic_socket.links[0].from_socket, diffuse_shader.inputs['Color'], True)
 
-                        else:
-                            diffuse_shader.inputs['Color'].default_value = (metallic_socket.default_value, metallic_socket.default_value, metallic_socket.default_value, 1)
+                    else:
+                        diffuse_shader.inputs['Color'].default_value = (metallic_socket.default_value, metallic_socket.default_value, metallic_socket.default_value, 1)
 
 
                     links.new(diffuse_shader.outputs[0], material_output.inputs[0], verify_limits = True)        
 
 
-                bpy.context.scene.cycles.samples = context.scene.samplesMetallic
-                bpy.context.scene.render.bake.use_pass_direct = False
-                bpy.context.scene.render.bake.use_pass_indirect = False
-                bpy.context.scene.render.bake.use_pass_color = True
+            bpy.context.scene.cycles.samples = context.scene.samplesMetallic
+            bpy.context.scene.render.bake.use_pass_direct = False
+            bpy.context.scene.render.bake.use_pass_indirect = False
+            bpy.context.scene.render.bake.use_pass_color = True
 
-                bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
+            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
 
-                bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
-                bakeimage.file_format = 'TARGA'
-                bakeimage.save()
+            bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
+            bakeimage.file_format = 'TARGA'
+            bakeimage.save()
 
             pop_materials(bakeSource, backup)
      
