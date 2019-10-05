@@ -337,7 +337,7 @@ class EasyBake(bpy.types.Operator):
 
                     
                     if metallic_socket.is_linked:
-                        links.new(metallic_socket.links[0].from_socket, diffuse_shader.inputs['Color'], True)
+                        links.new(metallic_socket.links[0].from_socket, diffuse_shader.inputs['Color'], verify_limits = True)
 
                     else:
                         diffuse_shader.inputs['Color'].default_value = (metallic_socket.default_value, metallic_socket.default_value, metallic_socket.default_value, 1)
