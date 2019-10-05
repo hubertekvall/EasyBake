@@ -16,26 +16,6 @@ from bpy.props import EnumProperty, BoolProperty, StringProperty, FloatProperty,
 
 
 
-def unhide(objectType):
-    if bpy.data.objects.get(objectType) is None:
-        for o in bpy.data.collections[objectType].objects:
-            o.hide_viewport = False
-    else:
-        bpy.data.objects[objectType].hide_viewport = False
-
-def hide(objectType):
-    if bpy.data.objects.get(objectType) is None:
-        for o in bpy.data.collections[objectType].objects:
-            o.hide_viewport = True
-    else:
-        bpy.data.objects[objectType].hide_viewport = True
-
-
-def find_link():
-    active_link = next(l for l in currentLinks if l.to_socket == outputNode.inputs['Surface'])        
-
-
-
 
 class EasyBakeUIPanel(bpy.types.Panel):
     """EasyBakeUIPanel Panel"""
@@ -52,14 +32,12 @@ class EasyBakeUIPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         
-
         
         col = layout.column(align=True)
         col.separator()
         row = col.row(align = True)
         row.prop(context.scene.render.bake, "cage_extrusion", text="Ray Distance")
         col.separator()
-
 
 
         box = layout.box()
@@ -78,23 +56,16 @@ class EasyBakeUIPanel(bpy.types.Panel):
         row.prop(context.scene.render.bake, "margin", text="")
         
         
-
-
-
         col = layout.column(align=True)
         col.separator()
         col.prop(context.scene, 'bakeFolder', text="")
         row = col.row(align = True)
         row.label(text="Filename:")
-        row.prop(context.scene, "bakePrefix", text="")
-        
+        row.prop(context.scene, "bakePrefix", text="")        
         col.separator()
 
 
-
-
         box = layout.box()
-
         col = box.column(align=True)
         row = col.row(align = True)
         row.prop(context.scene, "bakeNormal", icon="SHADING_RENDERED", text="Tangent Normal")
@@ -131,7 +102,6 @@ class EasyBakeUIPanel(bpy.types.Panel):
         row.prop(context.scene, "bakeUV", icon="SHADING_WIRE", text="UV Snapshot")
         
         
-        
         col = layout.column(align=True)
         col.separator()
         row = col.row(align = True)
@@ -150,6 +120,21 @@ class EasyBakeUIPanel(bpy.types.Panel):
 
 
 
+def push_materials(subject):
+    backup = []
+
+    for material_slot in subject.material_slots:
+                backup.append(material_slot.material)
+                material_slot.material = material_slot.material.copy()
+
+    return backup            
+
+
+def pop_materials(subject, backup):
+    for i, material_slot in enumerate(subject.material_slots):
+        bpy.data.materials.remove(material_slot.material)
+        material_slot.material = backup[i]
+
 
 
 
@@ -165,6 +150,10 @@ class EasyBake(bpy.types.Operator):
     bl_options = {"UNDO"}
     
 
+
+
+
+
     def execute(self, context):  
 
         #test if everything is set up OK first:
@@ -178,8 +167,10 @@ class EasyBake(bpy.types.Operator):
 
         selection_count = len(bpy.context.selected_objects)
         solo_bake = False
-        # bakeSource = {}
-        # base = {}
+        bakeSource = {}
+        base = {}
+
+
 
         if selection_count:
             base = bpy.context.active_object
@@ -199,8 +190,7 @@ class EasyBake(bpy.types.Operator):
             self.report({'WARNING'}, "Select your objects to bake first!")    
             return {'FINISHED'}  
 
-
-
+        base_backup = push_materials(base)
         
     #2 make sure we are in object mode and nothing is selected
         if bpy.context.object.mode != 'OBJECT':
@@ -211,12 +201,9 @@ class EasyBake(bpy.types.Operator):
         bpy.data.scenes[bpy.context.scene.name].render.engine = "CYCLES"
 
     #6 create temporary bake image and material
-        
         bakeimage = bpy.data.images.new("BakeImage", width=context.scene.bakeWidth, height=context.scene.bakeHeight)
-
         generated_nodes = {}
-        for mat in base.data.materials:
-               
+        for mat in base.data.materials:               
             node_tree = mat.node_tree
             new_node = node_tree.nodes.new("ShaderNodeTexImage")
             generated_nodes[mat] = new_node
@@ -252,15 +239,60 @@ class EasyBake(bpy.types.Operator):
             bakeimage.file_format = 'TARGA'
             bakeimage.save()
 
+        # if context.scene.bakeColor:
+        #     bpy.context.scene.cycles.samples = context.scene.samplesColor
+        #     bpy.context.scene.render.bake.use_pass_direct = False
+        #     bpy.context.scene.render.bake.use_pass_indirect = False
+        #     bpy.context.scene.render.bake.use_pass_color = True
+        #     bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
+        #     bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_color.tga"
+        #     bakeimage.file_format = 'TARGA'
+        #     bakeimage.save()
+
+
+       # Bake Color
         if context.scene.bakeColor:
-            bpy.context.scene.cycles.samples = context.scene.samplesColor
-            bpy.context.scene.render.bake.use_pass_direct = False
-            bpy.context.scene.render.bake.use_pass_indirect = False
-            bpy.context.scene.render.bake.use_pass_color = True
-            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
-            bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_color.tga"
-            bakeimage.file_format = 'TARGA'
-            bakeimage.save()
+
+            backup = push_materials(bakeSource)
+            
+
+            for material_slot in bakeSource.material_slots: 
+                material = material_slot.material 
+                node_tree = material.node_tree
+                links = node_tree.links
+                nodes = node_tree.nodes
+                material_output = nodes['Material Output']
+                
+                output_link = material_output.inputs['Surface'].links[0]   
+                socket_name = next(name for name in output_link.from_node.inputs.keys() if name == 'Base Color' or name == 'Color' )
+                 
+                if  socket_name == 'Base Color' or socket_name == 'Color':
+                    color_socket = output_link.from_node.inputs[socket_name]
+                    diffuse_shader = nodes.new(type='ShaderNodeBsdfDiffuse')
+                        if color_socket.is_linked:
+                            links.new(color_socket.links[0].from_socket, diffuse_shader.inputs['Color'], verify_limits = True)
+
+                        else:
+                            diffuse_shader.inputs['Color'].default_value = (color_socket.default_value, color_socket.default_value, color_socket.default_value, 1)
+
+
+                    links.new(diffuse_shader.outputs[0], material_output.inputs[0], verify_limits = True)        
+
+
+                bpy.context.scene.cycles.samples = context.scene.samplesMetallic
+                bpy.context.scene.render.bake.use_pass_direct = False
+                bpy.context.scene.render.bake.use_pass_indirect = False
+                bpy.context.scene.render.bake.use_pass_color = True
+
+                bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
+
+                bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
+                bakeimage.file_format = 'TARGA'
+                bakeimage.save()
+
+            pop_materials(bakeSource, backup)        
+
+
         
         if context.scene.bakeRoughness:
             bpy.context.scene.cycles.samples = context.scene.samplesRoughness
@@ -281,68 +313,56 @@ class EasyBake(bpy.types.Operator):
             bpy.ops.uv.export_layout(filepath=uvfilepath, size=(context.scene.bakeWidth, context.scene.bakeHeight))
             bpy.context.area.type = original_type
         
-        #
-        #
+
+        
+
         # Bake Metallic
         if context.scene.bakeMetallic:
-            old_materials = []
-            new_materials = []
+
+            backup = push_materials(bakeSource)
             
 
-            # Backup old materials of the bakesource and replace the slots with new clones
-            # Easier cleanup later on when we can just restore the old materials and discard our clones
-
-            for mslot in bakeSource.material_slots:
-                old_materials.append(mslot.material)
-                clone = mslot.material.copy()
-                mslot.material = clone
-                new_materials.append(clone)
-
-
-            for material in new_materials:
-              
+            for material_slot in bakeSource.material_slots: 
+                material = material_slot.material 
                 node_tree = material.node_tree
                 links = node_tree.links
                 nodes = node_tree.nodes
                 material_output = nodes['Material Output']
                 
-                # active_link = next(link for link in links if link.to_socket == material_output.inputs['Surface']) 
-                active_link = material_output.inputs['Surface'].links[0]   
-                metallic_socket = active_link.from_node.inputs['Metallic']
+                output_link = material_output.inputs['Surface'].links[0]   
+                
+                if  output_link.from_node.inputs.has('Metallic'):
+                    metallic_socket = output_link.from_node.inputs['Metallic']
+                    diffuse_shader = nodes.new(type='ShaderNodeBsdfDiffuse')
 
-                diffuse_shader = nodes.new(type='ShaderNodeBsdfDiffuse')
+                    
+                        if metallic_socket.is_linked:
+                            links.new(metallic_socket.links[0].from_socket, diffuse_shader.inputs['Color'], True)
 
-                if metallic_socket:
-                    if metallic_socket.is_linked:
-                        metallic_value_socket = metallic_socket.links[0].from_socket
-                        links.new(metallic_value_socket, diffuse_shader.inputs['Color'], True)
-                    else:
-                        diffuse_shader.inputs['Color'].default_value = (metallic_socket.default_value, metallic_socket.default_value, metallic_socket.default_value, 1)
-
-                links.new(diffuse_shader.outputs[0], material_output.inputs[0], verify_limits = True)        
+                        else:
+                            diffuse_shader.inputs['Color'].default_value = (metallic_socket.default_value, metallic_socket.default_value, metallic_socket.default_value, 1)
 
 
-            bpy.context.scene.cycles.samples = context.scene.samplesMetallic
-            bpy.context.scene.render.bake.use_pass_direct = False
-            bpy.context.scene.render.bake.use_pass_indirect = False
-            bpy.context.scene.render.bake.use_pass_color = True
+                    links.new(diffuse_shader.outputs[0], material_output.inputs[0], verify_limits = True)        
 
-            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
 
-            bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
-            bakeimage.file_format = 'TARGA'
-            bakeimage.save()
+                bpy.context.scene.cycles.samples = context.scene.samplesMetallic
+                bpy.context.scene.render.bake.use_pass_direct = False
+                bpy.context.scene.render.bake.use_pass_indirect = False
+                bpy.context.scene.render.bake.use_pass_color = True
 
-            for i, mslot in enumerate(bakeSource.material_slots):
-                mslot.material = old_materials[i] 
+                bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
 
-            for mat in new_materials:
-                bpy.data.materials.remove(mat)
+                bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
+                bakeimage.file_format = 'TARGA'
+                bakeimage.save()
 
+            pop_materials(bakeSource, backup)
      
 
 
 
+        pop_materials(base, base_backup) 
 
         bpy.ops.object.select_all(action='DESELECT')
         bpy.data.images.remove(bakeimage) 
@@ -351,6 +371,7 @@ class EasyBake(bpy.types.Operator):
         #reload all textures
         for image in bpy.data.images:
             image.reload()
+
 
 
         return {'FINISHED'}
