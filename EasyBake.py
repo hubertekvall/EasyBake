@@ -40,6 +40,13 @@ class EasyBakeUIPanel(bpy.types.Panel):
         col.separator()
 
 
+        
+        box = layout.box()
+        col = box.column(align=True)
+        row = col.row(align = True)
+        row.label(text="AA: ")
+        row.prop(context.scene, "AntiAliasing", expand=True)
+
         box = layout.box()
         col = box.column(align=True)
         row = col.row(align = True)
@@ -140,7 +147,12 @@ def pop_materials(subject, backup):
 
 
 
+def expand_image(context, image):
+    image.scale(context.scene.bakeWidth * int(context.scene.AntiAliasing), context.scene.bakeHeight  * int(context.scene.AntiAliasing))
 
+
+def shrink_image(context, image):
+    image.scale(context.scene.bakeWidth, context.scene.bakeHeight )
 
 
 class EasyBake(bpy.types.Operator):
@@ -202,6 +214,7 @@ class EasyBake(bpy.types.Operator):
 
     #6 create temporary bake image and material
         bakeimage = bpy.data.images.new("BakeImage", width=context.scene.bakeWidth, height=context.scene.bakeHeight)
+
         generated_nodes = {}
         for mat in base.data.materials:               
             node_tree = mat.node_tree
@@ -219,42 +232,50 @@ class EasyBake(bpy.types.Operator):
 
     #11 bake all maps!
         if context.scene.bakeNormal:
+            expand_image(context, bakeimage)
+            
             bpy.context.scene.cycles.samples = context.scene.samplesNormal
             bpy.ops.object.bake(type='NORMAL', use_clear=True, use_selected_to_active=not solo_bake, normal_space='TANGENT')
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_normal.tga"
             bakeimage.file_format = 'TARGA'
+
+            shrink_image(context, bakeimage)
+
             bakeimage.save()
         
+
         if context.scene.bakeObject:
+            expand_image(context, bakeimage)
+
             bpy.context.scene.cycles.samples = context.scene.samplesObject
             bpy.ops.object.bake(type='NORMAL', use_clear=True, use_selected_to_active=not solo_bake, normal_space='OBJECT')
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_object.tga"
             bakeimage.file_format = 'TARGA'
+
+            shrink_image(context, bakeimage)
+
             bakeimage.save()
 
+
         if context.scene.bakeAO:
+            expand_image(context, bakeimage)
+
             bpy.context.scene.cycles.samples = context.scene.samplesAO
             bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=not solo_bake)
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_ao.tga"
             bakeimage.file_format = 'TARGA'
+
+            shrink_image(context, bakeimage)
+
             bakeimage.save()
 
-        # if context.scene.bakeColor:
-        #     bpy.context.scene.cycles.samples = context.scene.samplesColor
-        #     bpy.context.scene.render.bake.use_pass_direct = False
-        #     bpy.context.scene.render.bake.use_pass_indirect = False
-        #     bpy.context.scene.render.bake.use_pass_color = True
-        #     bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
-        #     bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_color.tga"
-        #     bakeimage.file_format = 'TARGA'
-        #     bakeimage.save()
 
 
        # Bake Color
         if context.scene.bakeColor:
+            expand_image(context, bakeimage)
 
             backup = push_materials(bakeSource)
-            
 
             for material_slot in bakeSource.material_slots: 
                 material = material_slot.material 
@@ -265,6 +286,7 @@ class EasyBake(bpy.types.Operator):
                 
                 output_link = material_output.inputs['Surface'].links[0]   
                 socket_name = next(name for name in output_link.from_node.inputs.keys() if name == 'Base Color' or name == 'Color' )
+
                  
                 if socket_name == 'Base Color' or socket_name == 'Color':
                     color_socket = output_link.from_node.inputs[socket_name]
@@ -283,22 +305,28 @@ class EasyBake(bpy.types.Operator):
             bpy.context.scene.render.bake.use_pass_direct = False
             bpy.context.scene.render.bake.use_pass_indirect = False
             bpy.context.scene.render.bake.use_pass_color = True
-
             bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=not solo_bake)
-
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_color.tga"
             bakeimage.file_format = 'TARGA'
-            bakeimage.save()
 
+            shrink_image(context, bakeimage)
+
+            bakeimage.save()
             pop_materials(bakeSource, backup)        
 
 
         
         if context.scene.bakeRoughness:
+
+            expand_image(context, bakeimage)   
+
             bpy.context.scene.cycles.samples = context.scene.samplesRoughness
             bpy.ops.object.bake(type='ROUGHNESS', use_clear=True, use_selected_to_active=not solo_bake)
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_roughness.tga"
             bakeimage.file_format = 'TARGA'
+
+            shrink_image(context, bakeimage)
+
             bakeimage.save()
 
 
@@ -318,7 +346,7 @@ class EasyBake(bpy.types.Operator):
 
         # Bake Metallic
         if context.scene.bakeMetallic:
-
+            expand_image(context, bakeimage) 
             backup = push_materials(bakeSource)
             
 
@@ -355,8 +383,11 @@ class EasyBake(bpy.types.Operator):
 
             bakeimage.filepath_raw = context.scene.bakeFolder+context.scene.bakePrefix+"_metallic.tga"
             bakeimage.file_format = 'TARGA'
-            bakeimage.save()
 
+            shrink_image(context, bakeimage)
+
+            bakeimage.save()
+            
             pop_materials(bakeSource, backup)
      
 
@@ -497,11 +528,20 @@ def register():
         subtype = 'DIR_PATH'
         )
 
-    bpy.types.Scene.UseLowOnly = bpy.props.BoolProperty (
-        name = "UseLowOnly",
-        default = False,
-        description = "Only bake base on itself",
+
+
+    bpy.types.Scene.AntiAliasing = bpy.props.EnumProperty (
+            name = "AntiAliasing",
+            items = [
+                ('1', '1' , '1', '', 0),
+                ('2', '2' , '2', '', 1),
+                ('3', '3' , '3', '', 2),
+                ('4', '4' , '4', '', 3),
+            ],
+            default = '1'
         )
+
+
 
 def unregister():
     bpy.utils.unregister_class(EasyBake)
@@ -525,7 +565,7 @@ def unregister():
     del bpy.types.Scene.bakeWidth
     del bpy.types.Scene.bakeHeight
     del bpy.types.Scene.bakeFolder
-    del bpy.types.Scene.UseLowOnly
+    del bpy.types.Scene.AntiAliasing
     
 if __name__ == "__main__":
     register()
